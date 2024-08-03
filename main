@@ -1,0 +1,159 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart'
+    as webview_flutter_android;
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+
+class KigoWebView extends StatefulWidget {
+  const KigoWebView({Key? key, required this.url}) : super(key: key);
+  final String url;
+
+  @override
+  State<KigoWebView> createState() => _KigoWebViewState();
+}
+
+class _KigoWebViewState extends State<KigoWebView> {
+  bool isLoading = true;
+  String url = '';
+  String currentPath = "";
+
+  late final WebViewController _controller;
+
+  @override
+  void initState() {
+    url = widget.url;
+
+    late final PlatformWebViewControllerCreationParams params;
+    if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+      params = WebKitWebViewControllerCreationParams(
+        allowsInlineMediaPlayback: true,
+        mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+      );
+    } else {
+      params = const PlatformWebViewControllerCreationParams();
+    }
+
+    final WebViewController controller =
+        WebViewController.fromPlatformCreationParams(
+      params,
+    );
+
+    if (Platform.isAndroid) {
+      final myAndroidController = controller.platform
+          as webview_flutter_android.AndroidWebViewController;
+
+      myAndroidController.setOnShowFileSelector(_androidFilePicker);
+    }
+
+    controller
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onWebResourceError: (WebResourceError error) {
+            setLoading(false);
+            debugPrint('''
+              Page resource error:
+              code: ${error.errorCode}
+              description: ${error.description}
+              errorType: ${error.errorType}
+              isForMainFrame: ${error.isForMainFrame}
+          ''');
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            setLoading(false);
+            debugPrint('allowing navigation to ${request.url}');
+
+            return NavigationDecision.navigate;
+          },
+          onUrlChange: (UrlChange change) {
+            debugPrint('url change to ${change.url}');
+            setState(() {
+              currentPath = change.url ?? "";
+            });
+            if (url == change.url) {
+              print("ES LA MISMA");
+            } else {
+              print("NOOO :::>ES LA MISMA");
+            }
+          },
+        ),
+      )
+      ..addJavaScriptChannel(
+        'Toaster',
+        onMessageReceived: (JavaScriptMessage message) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message.message)),
+          );
+        },
+      )
+      ..loadRequest(Uri.parse(url));
+
+    _controller = controller;
+    super.initState();
+  }
+
+  Future<void> goBack() async {
+    if (await _controller.canGoBack()) {
+      _controller.goBack();
+    } else {
+      context.pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () async {
+            goBack();
+          },
+        ),
+        title: const Text('Control Reservations'),
+      ),
+      body: WebViewWidget(
+        controller: _controller,
+      ),
+    );
+  }
+
+  void setLoading(bool b) {
+    if (mounted) {
+      setState(() => isLoading = b);
+    }
+  }
+
+  Future<List<String>> _androidFilePicker(
+    webview_flutter_android.FileSelectorParams params,
+  ) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+    if (result != null) {
+      String filePath = result.files.single.path!;
+      String fileName = result.files.single.name;
+
+      // Convert the file to base64
+      List<int> fileBytes = await File(filePath).readAsBytes();
+
+      //convert filepath into uri
+      final filePath1 =
+          (await getApplicationCacheDirectory()).uri.resolve(fileName);
+      final file = await File.fromUri(filePath1).create(recursive: true);
+
+      //convert file in bytes
+      await file.writeAsBytes(fileBytes, flush: true);
+
+      return [file.uri.toString()];
+    }
+
+    return [];
+  }
+}
