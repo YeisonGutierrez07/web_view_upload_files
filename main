@@ -10,15 +10,15 @@ import 'package:webview_flutter_android/webview_flutter_android.dart'
     as webview_flutter_android;
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
-class KigoWebView extends StatefulWidget {
-  const KigoWebView({Key? key, required this.url}) : super(key: key);
+class PageWebView extends StatefulWidget {
+  const PageWebView({Key? key, required this.url}) : super(key: key);
   final String url;
 
   @override
-  State<KigoWebView> createState() => _KigoWebViewState();
+  State<PageWebView> createState() => _PageWebViewState();
 }
 
-class _KigoWebViewState extends State<KigoWebView> {
+class _PageWebViewState extends State<PageWebView> {
   bool isLoading = true;
   String url = '';
   String currentPath = "";
